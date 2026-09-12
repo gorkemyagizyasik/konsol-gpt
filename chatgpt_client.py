@@ -121,19 +121,38 @@ class ChatGPTClient:
 
         return headers
 
-    def get_sentinel_tokens(self, flow="conversation"):
+    def solve_turnstile_via_node_vm(self, prep_data, raw_dx):
+        try:
+            runner_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sentinel_runner.js")
+            cmd = ["node", runner_script, json.dumps(prep_data), raw_dx]
+            out = subprocess.check_output(cmd, timeout=8).decode("utf-8").strip()
+            data = json.loads(out)
+            if data.get("status") == "ok" and data.get("solved"):
+                return data.get("solved")
+        except Exception:
+            pass
+        return raw_dx
+
+    def get_sentinel_tokens(self, flow="conversation", parent_message_id=None, pow_token=None):
         url_prepare = "https://chatgpt.com/backend-api/sentinel/chat-requirements/prepare"
+        device_id = self.config.get("oai_device_id")
+        if not device_id or device_id == "336af599-fdc2-4e6f-8a57-e30dcbc29bfa":
+            device_id = str(uuid.uuid4())
+            self.config["oai_device_id"] = device_id
+            save_config(self.config)
+
         headers = self.get_headers({"content-type": "application/json", "accept": "*/*"})
-        device_id = self.config.get("oai_device_id", "336af599-fdc2-4e6f-8a57-e30dcbc29bfa")
 
         try:
             res = cffi_requests.post(url_prepare, headers=headers, json={"id": device_id, "flow": flow}, impersonate="chrome120", timeout=10)
             if res.status_code == 200:
                 data = res.json()
                 prep_token = data.get("prepare_token")
-                turnstile_token = data.get("turnstile", {}).get("dx") or ""
+                turnstile_raw_dx = data.get("turnstile", {}).get("dx") or ""
                 if prep_token:
-                    pow_token = self.generate_sentinel_proof_token(seed_uuid=str(uuid.uuid4()))
+                    solved_turnstile_token = self.solve_turnstile_via_node_vm(data, turnstile_raw_dx)
+                    if not pow_token:
+                        pow_token = self.generate_sentinel_proof_token(seed_uuid=parent_message_id or str(uuid.uuid4()))
                     url_fin = "https://chatgpt.com/backend-api/sentinel/chat-requirements/finalize"
                     res2 = cffi_requests.post(
                         url_fin,
@@ -141,7 +160,7 @@ class ChatGPTClient:
                         json={
                             "prepare_token": prep_token,
                             "proofofwork": pow_token,
-                            "turnstile": turnstile_token
+                            "turnstile": solved_turnstile_token
                         },
                         impersonate="chrome120",
                         timeout=10
@@ -151,9 +170,9 @@ class ChatGPTClient:
                         return {
                             "token": data2.get("token"),
                             "proof_token": pow_token,
-                            "turnstile_token": turnstile_token
+                            "turnstile_token": solved_turnstile_token
                         }
-        except Exception:
+        except Exception as e:
             pass
         return {}
 
@@ -260,7 +279,7 @@ class ChatGPTClient:
 
         target = 0xFFFFF // (difficulty // 1000 + 1)
         nonce = 0
-        while nonce < 50000:
+        while nonce < 500000:
             payload[3] = nonce
             json_str = json.dumps(payload, separators=(',', ':'))
             hash_digest = hashlib.sha256(json_str.encode('utf-8')).hexdigest()
@@ -273,20 +292,6 @@ class ChatGPTClient:
         b64_payload = base64.b64encode(json_str.encode('utf-8')).decode('utf-8')
         return f"gAAAAAB{b64_payload}~S"
 
-    def get_sentinel_tokens_via_node_vm(self, parent_message_id=None):
-        try:
-            runner_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sentinel_runner.js")
-            cmd = ["node", runner_script]
-            if parent_message_id:
-                cmd.append(parent_message_id)
-            out = subprocess.check_output(cmd, timeout=6).decode("utf-8").strip()
-            data = json.loads(out)
-            if data.get("status") == "ok":
-                return data
-        except Exception as e:
-            pass
-        return {}
-
     def send_message_stream(self, prompt, conversation_id=None, parent_message_id=None, model=None, proof_token=None, user_agent=None):
         model = model or self.config.get("model", "auto")
         message_id = str(uuid.uuid4())
@@ -294,15 +299,12 @@ class ChatGPTClient:
             parent_message_id = str(uuid.uuid4())
 
         self.get_access_token()
-        sentinel_data = self.get_sentinel_tokens_via_node_vm(parent_message_id)
-        if not sentinel_data.get("token"):
-            fallback_data = self.get_sentinel_tokens(flow="conversation")
-            sentinel_data.update(fallback_data)
+        proof_token = proof_token or self.generate_sentinel_proof_token(seed_uuid=parent_message_id, user_agent=user_agent)
+        conduit_token = self.get_conduit_token(parent_message_id, conversation_id=conversation_id, model=model)
+        sentinel_data = self.get_sentinel_tokens(flow="conversation", parent_message_id=parent_message_id, pow_token=proof_token)
 
         sentinel_token = sentinel_data.get("token")
-        proof_token = proof_token or sentinel_data.get("proof_token") or self.generate_sentinel_proof_token(seed_uuid=parent_message_id, user_agent=user_agent)
         turnstile_token = sentinel_data.get("turnstile_token")
-        conduit_token = self.get_conduit_token(parent_message_id, conversation_id=conversation_id, model=model)
 
         headers = self.get_headers({
             "content-type": "application/json",
@@ -341,6 +343,7 @@ class ChatGPTClient:
             ],
             "parent_message_id": parent_message_id,
             "model": model,
+            "client_prepare_state": "success",
             "timezone_offset_min": self.config.get("timezone_offset_min", -180),
             "timezone": self.config.get("timezone", "Europe/Istanbul"),
             "conversation_mode": {"kind": "primary_assistant"},
@@ -348,9 +351,19 @@ class ChatGPTClient:
             "supports_buffering": True,
             "supported_encodings": ["v1"],
             "client_contextual_info": {
+                "is_dark_mode": False,
+                "time_since_loaded": 200,
+                "page_height": 897,
+                "page_width": 1174,
+                "pixel_ratio": 1,
+                "screen_height": 1080,
+                "screen_width": 1920,
                 "app_name": "chatgpt.com",
-                "has_web_push_capabilities": True
-            }
+                "has_web_push_capabilities": True,
+                "web_push_notification_permission": "default"
+            },
+            "paragen_cot_summary_display_override": "allow",
+            "force_parallel_switch": "auto"
         }
 
         if conversation_id:
