@@ -120,24 +120,41 @@ class ChatGPTClient:
 
         return headers
 
-    def get_sentinel_tokens(self, flow="chat"):
+    def get_sentinel_tokens(self, flow="conversation"):
         url_prepare = "https://chatgpt.com/backend-api/sentinel/chat-requirements/prepare"
         headers = self.get_headers({"content-type": "application/json", "accept": "*/*"})
+        device_id = self.config.get("oai_device_id", "336af599-fdc2-4e6f-8a57-e30dcbc29bfa")
 
         try:
-            res = cffi_requests.post(url_prepare, headers=headers, json={}, impersonate="chrome120", timeout=10)
+            res = cffi_requests.post(url_prepare, headers=headers, json={"id": device_id, "flow": flow}, impersonate="chrome120", timeout=10)
             if res.status_code == 200:
                 data = res.json()
                 prep_token = data.get("prepare_token")
+                turnstile_token = data.get("turnstile", {}).get("dx") or ""
                 if prep_token:
+                    pow_token = self.generate_sentinel_proof_token(seed_uuid=str(uuid.uuid4()))
                     url_fin = "https://chatgpt.com/backend-api/sentinel/chat-requirements/finalize"
-                    res2 = cffi_requests.post(url_fin, headers=headers, json={"prepare_token": prep_token}, impersonate="chrome120", timeout=10)
+                    res2 = cffi_requests.post(
+                        url_fin,
+                        headers=headers,
+                        json={
+                            "prepare_token": prep_token,
+                            "proofofwork": pow_token,
+                            "turnstile": turnstile_token
+                        },
+                        impersonate="chrome120",
+                        timeout=10
+                    )
                     if res2.status_code == 200:
                         data2 = res2.json()
-                        return data2.get("token")
+                        return {
+                            "token": data2.get("token"),
+                            "proof_token": pow_token,
+                            "turnstile_token": turnstile_token
+                        }
         except Exception:
             pass
-        return None
+        return {}
 
     def list_conversations(self, offset=0, limit=28):
         url = f"https://chatgpt.com/backend-api/conversations?offset={offset}&limit={limit}&order=updated&is_archived=false&is_starred=false"
@@ -210,18 +227,13 @@ class ChatGPTClient:
         
         if isinstance(difficulty, str):
             try:
-                if difficulty.startswith("0x"):
-                    difficulty = int(difficulty, 16)
-                elif difficulty.isdigit():
-                    difficulty = int(difficulty)
-                else:
-                    difficulty = int(difficulty, 16)
+                difficulty = int(difficulty, 16) if difficulty.startswith("0x") else int(difficulty)
             except Exception:
                 difficulty = 3000
 
         ua = user_agent or self.config.get("user_agent", DEFAULT_CONFIG["user_agent"])
-        time_str = time.strftime("%a %b %d %Y %H:%M:%S GMT+0300 (TRT)")
-        epoch_ms = time.time() * 1000
+        time_str = time.strftime("%a %b %d %Y %H:%M:%S GMT+0300 (Türkiye Standart Saati)")
+        epoch_ms = round(time.time() * 1000, 1)
 
         payload = [
             difficulty,
@@ -234,10 +246,10 @@ class ChatGPTClient:
             "tr-TR",
             "tr-TR,tr,en-US,en",
             6,
-            "deprecatedRunAdAuctionEnforcesKAnonymity−false",
+            "deprecatedRunAdAuctionEnforcesKAnonymity\u2212false",
             "location",
             "scroll",
-            "148:20.30000000447",
+            148620.30000000447,
             seed_uuid,
             "",
             4,
@@ -245,12 +257,13 @@ class ChatGPTClient:
             0, 0, 0, 0, 0, 0, 0
         ]
 
+        target = 0xFFFFF // (difficulty // 1000 + 1)
         nonce = 0
-        while nonce < 30000:
+        while nonce < 50000:
             payload[3] = nonce
             json_str = json.dumps(payload, separators=(',', ':'))
             hash_digest = hashlib.sha256(json_str.encode('utf-8')).hexdigest()
-            if hash_digest.startswith("000") or (int(hash_digest[:5], 16) < (0xFFFFF // (difficulty // 1000 + 1))):
+            if int(hash_digest[:5], 16) <= target:
                 b64_payload = base64.b64encode(json_str.encode('utf-8')).decode('utf-8')
                 return f"gAAAAAB{b64_payload}~S"
             nonce += 1
@@ -265,9 +278,11 @@ class ChatGPTClient:
         if not parent_message_id:
             parent_message_id = str(uuid.uuid4())
 
-        sentinel_token = self.get_sentinel_tokens()
+        sentinel_data = self.get_sentinel_tokens(flow="conversation")
+        sentinel_token = sentinel_data.get("token")
+        proof_token = proof_token or sentinel_data.get("proof_token") or self.generate_sentinel_proof_token(seed_uuid=parent_message_id, user_agent=user_agent)
+        turnstile_token = sentinel_data.get("turnstile_token")
         conduit_token = self.get_conduit_token(parent_message_id, conversation_id=conversation_id, model=model)
-        proof_token = proof_token or self.generate_sentinel_proof_token(seed_uuid=parent_message_id, user_agent=user_agent)
 
         headers = self.get_headers({
             "content-type": "application/json",
@@ -281,6 +296,11 @@ class ChatGPTClient:
         if sentinel_token:
             headers["openai-sentinel-chat-requirements-token"] = sentinel_token
         if conduit_token:
+            headers["x-conduit-token"] = conduit_token
+        if proof_token:
+            headers["openai-sentinel-proof-token"] = proof_token
+        if turnstile_token:
+            headers["openai-sentinel-turnstile-token"] = turnstile_token
             headers["x-conduit-token"] = conduit_token
         if proof_token:
             headers["openai-sentinel-proof-token"] = proof_token

@@ -12,19 +12,18 @@ from headless_bridge import HeadlessChatGPTBridge
 app = Flask(__name__, static_folder="public", static_url_path="")
 client = ChatGPTClient()
 headless_bridge = HeadlessChatGPTBridge()
+ENABLE_HEADLESS = os.environ.get("ENABLE_HEADLESS", "0").lower() in ("1", "true", "yes")
 
-# Asyncio loop thread for Headless Bridge
 loop = asyncio.new_event_loop()
 
-def run_async_loop(l):
-    asyncio.set_event_loop(l)
-    l.run_forever()
+if ENABLE_HEADLESS:
+    def run_async_loop(l):
+        asyncio.set_event_loop(l)
+        l.run_forever()
 
-loop_thread = threading.Thread(target=run_async_loop, args=(loop,), daemon=True)
-loop_thread.start()
-
-# Initialize Headless Bridge in background thread
-asyncio.run_coroutine_threadsafe(headless_bridge.start(), loop)
+    loop_thread = threading.Thread(target=run_async_loop, args=(loop,), daemon=True)
+    loop_thread.start()
+    asyncio.run_coroutine_threadsafe(headless_bridge.start(), loop)
 
 @app.route("/")
 def index():
@@ -191,8 +190,8 @@ def chat_stream():
             yield "data: [DONE]\n\n"
             return
 
-        # Priority 2: Headless Playwright Bridge
-        use_headless = headless_bridge.is_ready
+        # Direct HTTP Client Engine (Default)
+        use_headless = ENABLE_HEADLESS and headless_bridge.is_ready
         headless_success = False
 
         if use_headless:
@@ -218,7 +217,6 @@ def chat_stream():
             except Exception:
                 headless_success = False
 
-        # Priority 3: Direct HTTP client fallback
         if not headless_success:
             for chunk in client.send_message_stream(
                 prompt=prompt,
