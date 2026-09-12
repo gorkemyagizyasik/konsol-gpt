@@ -293,6 +293,7 @@ class ChatGPTClient:
         if not parent_message_id:
             parent_message_id = str(uuid.uuid4())
 
+        self.get_access_token()
         sentinel_data = self.get_sentinel_tokens_via_node_vm(parent_message_id)
         if not sentinel_data.get("token"):
             fallback_data = self.get_sentinel_tokens(flow="conversation")
