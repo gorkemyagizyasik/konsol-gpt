@@ -4,6 +4,7 @@ import uuid
 import time
 import base64
 import hashlib
+import subprocess
 from curl_cffi import requests as cffi_requests
 
 CONFIG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "config.json")
@@ -272,13 +273,31 @@ class ChatGPTClient:
         b64_payload = base64.b64encode(json_str.encode('utf-8')).decode('utf-8')
         return f"gAAAAAB{b64_payload}~S"
 
+    def get_sentinel_tokens_via_node_vm(self, parent_message_id=None):
+        try:
+            runner_script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "sentinel_runner.js")
+            cmd = ["node", runner_script]
+            if parent_message_id:
+                cmd.append(parent_message_id)
+            out = subprocess.check_output(cmd, timeout=6).decode("utf-8").strip()
+            data = json.loads(out)
+            if data.get("status") == "ok":
+                return data
+        except Exception as e:
+            pass
+        return {}
+
     def send_message_stream(self, prompt, conversation_id=None, parent_message_id=None, model=None, proof_token=None, user_agent=None):
         model = model or self.config.get("model", "auto")
         message_id = str(uuid.uuid4())
         if not parent_message_id:
             parent_message_id = str(uuid.uuid4())
 
-        sentinel_data = self.get_sentinel_tokens(flow="conversation")
+        sentinel_data = self.get_sentinel_tokens_via_node_vm(parent_message_id)
+        if not sentinel_data.get("token"):
+            fallback_data = self.get_sentinel_tokens(flow="conversation")
+            sentinel_data.update(fallback_data)
+
         sentinel_token = sentinel_data.get("token")
         proof_token = proof_token or sentinel_data.get("proof_token") or self.generate_sentinel_proof_token(seed_uuid=parent_message_id, user_agent=user_agent)
         turnstile_token = sentinel_data.get("turnstile_token")
@@ -301,9 +320,6 @@ class ChatGPTClient:
             headers["openai-sentinel-proof-token"] = proof_token
         if turnstile_token:
             headers["openai-sentinel-turnstile-token"] = turnstile_token
-            headers["x-conduit-token"] = conduit_token
-        if proof_token:
-            headers["openai-sentinel-proof-token"] = proof_token
 
         payload = {
             "action": "next",
