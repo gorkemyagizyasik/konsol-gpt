@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChatGPT Custom Web Client</title>
+  <meta name="description" content="Kendi sunucunuz ve arayüzünüz üzerinden ChatGPT hesabınıza erişin.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@500;600;700&display=swap" rel="stylesheet">
+  <!-- Markdown & Code Syntax Highlighting -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <div class="app-container">
+
+    <!-- Sidebar -->
+    <aside class="sidebar" id="sidebar">
+      <div class="sidebar-header">
+        <div class="brand">
+          <div class="brand-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 0 1 10 10c0 5.523-4.477 10-10 10S2 17.523 2 12A10 10 0 0 1 12 2z"/><path d="M12 8v8"/><path d="M8 12h8"/></svg>
+          </div>
+          <span class="brand-title">ChatGPT Web</span>
+        </div>
+        <button id="btn-new-chat" class="btn-primary">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+          Yeni Sohbet
+        </button>
+      </div>
+
+      <div class="sidebar-search">
+        <input type="text" id="search-threads" placeholder="Sohbetlerde ara..." />
+      </div>
+
+      <div class="sidebar-history-container">
+        <div class="history-title">Geçmiş Sohbetler</div>
+        <ul id="history-list" class="history-list">
+          <li class="history-loading">Yükleniyor...</li>
+        </ul>
+      </div>
+
+      <div class="sidebar-footer">
+        <div class="auth-status-card" id="auth-status-card">
+          <span class="status-indicator" id="auth-indicator"></span>
+          <span class="status-text" id="auth-status-text">Oturum kontrol ediliyor...</span>
+        </div>
+        <button id="btn-open-settings" class="btn-secondary">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+          Ayarlar & Auth
+        </button>
+      </div>
+    </aside>
+
+    <!-- Main Chat Workspace -->
+    <main class="chat-workspace">
+
+      <!-- Top Header -->
+      <header class="top-bar">
+        <div class="top-left">
+          <button id="btn-toggle-sidebar" class="icon-btn" title="Menüyü Gizle/Göster">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>
+          </button>
+          <div class="active-thread-info">
+            <h2 id="active-thread-title">Yeni Sohbet</h2>
+            <span class="active-thread-id" id="active-thread-id">Oturum başlatılmadı</span>
+          </div>
+        </div>
+
+        <div class="top-right">
+          <div class="model-picker">
+            <label for="select-model">Model:</label>
+            <select id="select-model" class="model-select">
+              <option value="auto">Auto (Otomatik En İyi Model)</option>
+              <option value="gpt-4o">GPT-4o (Amiral Gemisi)</option>
+              <option value="gpt-4o-mini">GPT-4o Mini (Hızlı)</option>
+              <option value="gpt-4">GPT-4 Standard</option>
+            </select>
+          </div>
+        </div>
+      </header>
+
+      <!-- Messages Viewport -->
+      <div id="messages-container" class="messages-container">
+        <div class="welcome-screen" id="welcome-screen">
+          <div class="welcome-badge">HAR Entegrasyonu & Özel Arayüz</div>
+          <h1>ChatGPT'ye Hoş Geldiniz</h1>
+          <p>Kendi arayüzünüz üzerinden direkt ChatGPT hesabınızı kullanın. Başlamak için sorunuzu yazın veya sol menüden bir sohbet seçin.</p>
+
+          <div class="welcome-grid">
+            <div class="welcome-card" onclick="setInputPrompt('Python ile hızlı bir HTTP istemcisi nasıl yazılır?')">
+              <div class="card-icon">💻</div>
+              <div class="card-title">Kodlama Yardımı</div>
+              <div class="card-desc">Python ile hızlı bir HTTP istemcisi nasıl yazılır?</div>
+            </div>
+            <div class="welcome-card" onclick="setInputPrompt('Bana ChatGPT GPT-4o ve GPT-4o Mini farklarını özetle.')">
+              <div class="card-icon">⚡</div>
+              <div class="card-title">Model Karşılaştırması</div>
+              <div class="card-desc">ChatGPT GPT-4o ve GPT-4o Mini farklarını özetle.</div>
+            </div>
+            <div class="welcome-card" onclick="setInputPrompt('Oturum anahtarımı (Cookie/Token) nasıl güncellerim?')">
+              <div class="card-icon">🔑</div>
+              <div class="card-title">Oturum Bilgisi</div>
+              <div class="card-desc">Oturum anahtarımı (Cookie/Token) nasıl güncellerim?</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bottom Composer -->
+      <div class="composer-container">
+        <form id="chat-form" class="composer-form">
+          <textarea id="user-input" class="composer-textarea" placeholder="ChatGPT'ye bir mesaj yazın... (Göndermek için Enter, yeni satır için Shift+Enter)" rows="1"></textarea>
+          <button type="submit" id="btn-send" class="btn-send" title="Gönder">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+          </button>
+        </form>
+        <div class="composer-footer">
+          <span>Port: <strong>8023</strong> | ChatGPT Backend API Entegrasyonu</span>
+        </div>
+      </div>
+
+    </main>
+
+  </div>
+
+  <!-- Native Settings Dialog -->
+  <dialog id="settings-dialog" class="settings-dialog">
+    <div class="dialog-content">
+      <div class="dialog-header">
+        <h3>ChatGPT Oturum & Auth Ayarları</h3>
+        <button id="btn-close-settings" class="dialog-close">&times;</button>
+      </div>
+
+      <div class="dialog-body">
+        <div class="alert-info">
+          <strong>ℹ️ Not:</strong> Tarayıcınız dışa aktarılan HAR dosyasında Cookie ve Auth başlıklarını güvenlik gereği gizler. Buraya ChatGPT hesabınızın <strong>Cookie</strong> başlığını veya <strong>Session Auth Token</strong> bilgisini ekleyebilirsiniz.
+        </div>
+
+        <div class="form-group">
+          <label for="setting-cookie">Tam Cookie Başlığı Metni (Cookie String):</label>
+          <textarea id="setting-cookie" placeholder="Örn: __Secure-next-auth.session-token=eyJ...; cf_clearance=..."></textarea>
+          <small class="help-text">Tarayıcı DevTools -> Network sekmesinde chatgpt.com isteklerindeki 'Cookie' başlık değeridir.</small>
+        </div>
+
+        <div class="form-group">
+          <label for="setting-token">Authorization Bearer Token / Session Token:</label>
+          <input type="text" id="setting-token" placeholder="Örn: eyJhbGciOiJSUzI1Ni..." />
+          <small class="help-text">https://chatgpt.com/api/auth/session sayfasından aldığınız accessToken değeridir.</small>
+        </div>
+
+        <div class="form-group">
+          <label for="setting-device-id">Device ID (oai-device-id):</label>
+          <input type="text" id="setting-device-id" placeholder="14c08954-b46c-467b-afa2-86e4c5a4309c" />
+        </div>
+      </div>
+
+      <div class="dialog-footer">
+        <button id="btn-save-settings" class="btn-primary">Kaydet & Güncelle</button>
+      </div>
+    </div>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>

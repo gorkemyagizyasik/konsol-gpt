@@ -1,0 +1,9 @@
+{
+  "cookie": "YOUR_COOKIE_STRING_HERE",
+  "auth_token": "YOUR_AUTH_TOKEN_HERE",
+  "oai_device_id": "336af599-fdc2-4e6f-8a57-e30dcbc29bfa",
+  "model": "gpt-4o",
+  "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36",
+  "timezone": "Europe/Istanbul",
+  "timezone_offset_min": -180
+}

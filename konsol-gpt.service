@@ -1,0 +1,15 @@
+[Unit]
+Description=Konsol GPT Web Interface Service
+After=network.target
+
+[Service]
+Type=simple
+User=gorkem
+WorkingDirectory=/home/gorkem/Belgeler/konsol-gpt
+ExecStart=/usr/bin/python3 /home/gorkem/Belgeler/konsol-gpt/server.py
+Restart=always
+RestartSec=3
+Environment=PORT=8023
+
+[Install]
+WantedBy=multi-user.target
