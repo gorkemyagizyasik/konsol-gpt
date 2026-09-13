@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Konsol-GPT Cookie & Network Analyzer",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "ChatGPT oturum çerezlerini ve ağ isteklerini (Network Traces) Konsol-GPT servisine senkronize ve analiz eder.",
   "permissions": [
     "cookies",
@@ -22,6 +22,11 @@
       "matches": ["https://chatgpt.com/*"],
       "js": ["analyzer_main.js"],
       "world": "MAIN",
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://chatgpt.com/*"],
+      "js": ["content_script.js"],
       "run_at": "document_start"
     }
   ]

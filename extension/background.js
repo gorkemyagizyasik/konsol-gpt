@@ -69,6 +69,17 @@ async function syncCookies() {
   }
 }
 
+async function logTrace(trace) {
+  try {
+    const serverUrl = await getTargetServerUrl();
+    await fetch(`${serverUrl}/api/analyzer/log`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ trace })
+    });
+  } catch (e) {}
+}
+
 // Cookie değişikliklerini dinle (Debounce 3sn)
 let syncTimeout = null;
 chrome.cookies.onChanged.addListener((changeInfo) => {
@@ -85,5 +96,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === "sync_now") {
     syncCookies().then(res => sendResponse(res));
     return true; // async response
+  } else if (message.action === "log_trace" && message.trace) {
+    logTrace(message.trace);
   }
 });

@@ -2,7 +2,7 @@
   if (window.__konsol_gpt_analyzer_injected) return;
   window.__konsol_gpt_analyzer_injected = true;
 
-  console.log("🔍 Konsol-GPT Network Analyzer Active on chatgpt.com");
+  console.log("🔍 Konsol-GPT Network Analyzer Interceptor Active");
 
   const origFetch = window.fetch;
 
@@ -39,13 +39,11 @@
         timestamp: new Date().toISOString()
       };
 
-      // Arka planda localhost:8023 sunucusuna kayıt gönder (Chat akışını engellememek için async/non-blocking)
       try {
-        origFetch.call(window, "http://localhost:8023/api/analyzer/log", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ trace: traceData })
-        }).catch(() => {});
+        window.postMessage({
+          type: "KONSOL_GPT_TRACE",
+          trace: traceData
+        }, "*");
       } catch (e) {}
     }
 
