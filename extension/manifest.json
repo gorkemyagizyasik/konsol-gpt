@@ -1,0 +1,20 @@
+{
+  "manifest_version": 3,
+  "name": "Konsol-GPT Cookie Sync",
+  "version": "1.0.0",
+  "description": "ChatGPT oturum çerezlerini (Cookie) otomatik olarak Konsol-GPT servisine senkronize eder.",
+  "permissions": [
+    "cookies",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://chatgpt.com/*",
+    "http://localhost:8023/*"
+  ],
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  }
+}
