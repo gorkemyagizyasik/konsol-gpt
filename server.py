@@ -114,6 +114,56 @@ def relay_chunk():
         task_responses[task_id].put(chunk)
     return jsonify({"status": "ok"})
 
+# --- NETWORK ANALYZER ENDPOINTS ---
+ANALYZER_LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "analyzer_traces.json")
+analyzer_traces = []
+
+if os.path.exists(ANALYZER_LOG_FILE):
+    try:
+        with open(ANALYZER_LOG_FILE, "r", encoding="utf-8") as f:
+            analyzer_traces = json.load(f)
+    except Exception:
+        analyzer_traces = []
+
+@app.route("/api/analyzer/log", methods=["POST", "OPTIONS"])
+def log_analyzer_trace():
+    if request.method == "OPTIONS":
+        resp = jsonify({"status": "ok"})
+        resp.headers["Access-Control-Allow-Origin"] = "*"
+        resp.headers["Access-Control-Allow-Headers"] = "Content-Type"
+        return resp
+
+    data = request.get_json() or {}
+    trace = data.get("trace")
+    if trace:
+        analyzer_traces.append(trace)
+        if len(analyzer_traces) > 200:
+            analyzer_traces.pop(0)
+        try:
+            with open(ANALYZER_LOG_FILE, "w", encoding="utf-8") as f:
+                json.dump(analyzer_traces, f, ensure_ascii=False, indent=2)
+        except Exception:
+            pass
+
+    resp = jsonify({"status": "ok", "message": "Trace logged", "count": len(analyzer_traces)})
+    resp.headers["Access-Control-Allow-Origin"] = "*"
+    return resp
+
+@app.route("/api/analyzer/logs", methods=["GET"])
+def get_analyzer_logs():
+    return jsonify({"status": "ok", "count": len(analyzer_traces), "data": analyzer_traces})
+
+@app.route("/api/analyzer/clear", methods=["POST"])
+def clear_analyzer_logs():
+    global analyzer_traces
+    analyzer_traces = []
+    try:
+        with open(ANALYZER_LOG_FILE, "w", encoding="utf-8") as f:
+            json.dump([], f)
+    except Exception:
+        pass
+    return jsonify({"status": "ok", "message": "Analyzer logs cleared"})
+
 # --- CHAT ENDPOINT USING USERSCRIPT RELAY / HEADLESS / DIRECT CLIENT ---
 @app.route("/api/chat", methods=["POST"])
 def chat_stream():

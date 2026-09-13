@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "Konsol-GPT Cookie Sync",
-  "version": "1.0.0",
-  "description": "ChatGPT oturum çerezlerini (Cookie) otomatik olarak Konsol-GPT servisine senkronize eder.",
+  "name": "Konsol-GPT Cookie & Network Analyzer",
+  "version": "1.1.0",
+  "description": "ChatGPT oturum çerezlerini ve ağ isteklerini (Network Traces) Konsol-GPT servisine senkronize ve analiz eder.",
   "permissions": [
     "cookies",
     "storage"
@@ -16,5 +16,13 @@
   },
   "background": {
     "service_worker": "background.js"
-  }
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://chatgpt.com/*"],
+      "js": ["analyzer_main.js"],
+      "world": "MAIN",
+      "run_at": "document_start"
+    }
+  ]
 }
